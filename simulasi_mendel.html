@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simulasi Persilangan Genetika (Hukum Mendel)</title>
+  <style>
+    :root {
+      font-family: Arial, sans-serif;
+      color-scheme: light dark;
+    }
+    body {
+      margin: 0;
+      padding: 24px;
+      background: #f7f7f7;
+      color: #1a1a1a;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    }
+    h1 { margin-top: 0; }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 12px;
+      align-items: end;
+    }
+    label { font-weight: 600; display: block; margin-bottom: 6px; }
+    input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 1rem;
+      box-sizing: border-box;
+    }
+    button {
+      padding: 10px 14px;
+      border: 0;
+      border-radius: 8px;
+      background: #1565c0;
+      color: white;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:hover { background: #0f4f98; }
+    .hint {
+      font-size: 0.9rem;
+      margin-top: 8px;
+      color: #555;
+    }
+    .error {
+      margin-top: 14px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: #ffe8e8;
+      color: #9d1c1c;
+      display: none;
+    }
+    .result {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border: 1px solid #e4e4e4;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px;
+      border-bottom: 1px solid #eee;
+    }
+    th { background: #f2f4f8; }
+    tr:last-child td { border-bottom: none; }
+    @media (max-width: 760px) {
+      .form-grid, .result {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <h1>Simulasi Persilangan Genetika (Hukum Mendel)</h1>
+    <p>
+      Mendukung persilangan monohibrid dan dihibrid dengan asumsi dominansi lengkap.
+      Contoh input valid: <code>Aa</code>, <code>aa</code>, <code>AaBb</code>, <code>Aabb</code>.
+    </p>
+
+    <div class="form-grid">
+      <div>
+        <label for="induk1">Genotipe Induk 1</label>
+        <input id="induk1" value="Aa" />
+      </div>
+      <div>
+        <label for="induk2">Genotipe Induk 2</label>
+        <input id="induk2" value="Aa" />
+      </div>
+      <div>
+        <button id="btnSimulasi" type="button">Simulasikan</button>
+      </div>
+    </div>
+
+    <div class="hint">Gunakan 2 alel per lokus. Panjang genotipe harus genap dan sama antara kedua induk.</div>
+    <div id="error" class="error"></div>
+
+    <section class="result">
+      <div>
+        <h2>Distribusi Genotipe</h2>
+        <table>
+          <thead>
+            <tr><th>Genotipe</th><th>Persentase</th></tr>
+          </thead>
+          <tbody id="genotipeBody"></tbody>
+        </table>
+      </div>
+
+      <div>
+        <h2>Distribusi Fenotipe</h2>
+        <table>
+          <thead>
+            <tr><th>Fenotipe</th><th>Persentase</th></tr>
+          </thead>
+          <tbody id="fenotipeBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    function normalisasiLokus(lokus) {
+      if (lokus.length !== 2) {
+        throw new Error('Setiap lokus harus berisi 2 alel.');
+      }
+      return lokus
+        .split('')
+        .sort((a, b) => {
+          const aLower = a === a.toLowerCase();
+          const bLower = b === b.toLowerCase();
+          if (aLower !== bLower) return aLower ? 1 : -1;
+          return a.localeCompare(b);
+        })
+        .join('');
+    }
+
+    function pisahLokus(genotipe) {
+      const teks = genotipe.trim();
+      if (!teks || teks.length % 2 !== 0) {
+        throw new Error('Panjang genotipe harus genap (2 alel per lokus).');
+      }
+      if (!/^[A-Za-z]+$/.test(teks)) {
+        throw new Error('Genotipe hanya boleh berisi huruf A-Z atau a-z.');
+      }
+      const lokus = [];
+      for (let i = 0; i < teks.length; i += 2) {
+        lokus.push(normalisasiLokus(teks.slice(i, i + 2)));
+      }
+      return lokus;
+    }
+
+    function gametDariGenotipe(genotipe) {
+      const lokus = pisahLokus(genotipe);
+      let hasil = [''];
+      for (const l of lokus) {
+        const baru = [];
+        for (const prefix of hasil) {
+          baru.push(prefix + l[0]);
+          baru.push(prefix + l[1]);
+        }
+        hasil = baru;
+      }
+      return hasil;
+    }
+
+    function gabungGamet(g1, g2) {
+      if (g1.length !== g2.length) {
+        throw new Error('Kedua gamet harus memiliki jumlah lokus yang sama.');
+      }
+      let hasil = '';
+      for (let i = 0; i < g1.length; i++) {
+        hasil += normalisasiLokus(g1[i] + g2[i]);
+      }
+      return hasil;
+    }
+
+    function fenotipeDariGenotipe(genotipe) {
+      const lokus = pisahLokus(genotipe);
+      return lokus
+        .map((l) => {
+          const dominan = l.split('').find((ch) => ch === ch.toUpperCase());
+          return dominan ? `Dominan(${dominan})` : `Resesif(${l[0]})`;
+        })
+        .join(' | ');
+    }
+
+    function simulasiPersilangan(induk1, induk2) {
+      const g1 = gametDariGenotipe(induk1);
+      const g2 = gametDariGenotipe(induk2);
+
+      if (g1[0].length !== g2[0].length) {
+        throw new Error('Jumlah lokus kedua induk harus sama.');
+      }
+
+      const hitungGenotipe = new Map();
+      const total = g1.length * g2.length;
+
+      for (const gamet1 of g1) {
+        for (const gamet2 of g2) {
+          const anak = gabungGamet(gamet1, gamet2);
+          hitungGenotipe.set(anak, (hitungGenotipe.get(anak) || 0) + 1);
+        }
+      }
+
+      const hitungFenotipe = new Map();
+      for (const [geno, jumlah] of hitungGenotipe.entries()) {
+        const feno = fenotipeDariGenotipe(geno);
+        hitungFenotipe.set(feno, (hitungFenotipe.get(feno) || 0) + jumlah);
+      }
+
+      const urutkan = (mapObj) => [...mapObj.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([label, jumlah]) => ({ label, persen: (jumlah / total) * 100 }));
+
+      return {
+        genotipe: urutkan(hitungGenotipe),
+        fenotipe: urutkan(hitungFenotipe)
+      };
+    }
+
+    function renderTabel(rows, bodyId) {
+      const body = document.getElementById(bodyId);
+      body.innerHTML = '';
+      for (const row of rows) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${row.label}</td><td>${row.persen.toFixed(2)}%</td>`;
+        body.appendChild(tr);
+      }
+    }
+
+    function tampilkanError(pesan) {
+      const el = document.getElementById('error');
+      el.textContent = pesan;
+      el.style.display = 'block';
+    }
+
+    function sembunyikanError() {
+      const el = document.getElementById('error');
+      el.textContent = '';
+      el.style.display = 'none';
+    }
+
+    function jalankanSimulasi() {
+      const induk1 = document.getElementById('induk1').value;
+      const induk2 = document.getElementById('induk2').value;
+      try {
+        sembunyikanError();
+        const hasil = simulasiPersilangan(induk1, induk2);
+        renderTabel(hasil.genotipe, 'genotipeBody');
+        renderTabel(hasil.fenotipe, 'fenotipeBody');
+      } catch (err) {
+        tampilkanError(err.message || 'Terjadi kesalahan saat simulasi.');
+      }
+    }
+
+    document.getElementById('btnSimulasi').addEventListener('click', jalankanSimulasi);
+    jalankanSimulasi();
+  </script>
+</body>
+</html>
