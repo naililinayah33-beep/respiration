@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+"""Simulasi persilangan genetika berbasis hukum Mendel.
+
+Mendukung:
+1) Persilangan monohibrid (satu sifat), misal: Aa x Aa
+2) Persilangan dihibrid (dua sifat), misal: AaBb x AaBb
+
+Aturan alel:
+- Gunakan huruf besar untuk alel dominan (A) dan huruf kecil untuk resesif (a).
+- Untuk dihibrid, gabungkan dua gen, contoh: AaBb atau Aabb.
+"""
+
+from __future__ import annotations
+
+from collections import Counter
+from dataclasses import dataclass
+from itertools import product
+
+
+@dataclass(frozen=True)
+class HasilPersilangan:
+    genotipe: dict[str, float]
+    fenotipe: dict[str, float]
+
+
+def _normalisasi_lokus(lokus: str) -> str:
+    """Urutkan alel dalam satu lokus agar dominan ditaruh di depan.
+
+    Contoh:
+    - aA -> Aa
+    - aa -> aa
+    - AA -> AA
+    """
+    if len(lokus) != 2:
+        raise ValueError("Setiap lokus harus berisi 2 alel.")
+    return "".join(sorted(lokus, key=lambda c: (c.islower(), c)))
+
+
+def _pisah_lokus(genotipe: str) -> list[str]:
+    if len(genotipe) % 2 != 0:
+        raise ValueError("Panjang genotipe harus genap (2 alel per lokus).")
+    lokus = [genotipe[i : i + 2] for i in range(0, len(genotipe), 2)]
+    return [_normalisasi_lokus(l) for l in lokus]
+
+
+def _gamet_dari_genotipe(genotipe: str) -> list[str]:
+    """Bangkitkan semua gamet kemungkinan dari sebuah genotipe.
+
+    Contoh:
+    - Aa -> ["A", "a"]
+    - AaBb -> ["AB", "Ab", "aB", "ab"]
+    """
+    lokus = _pisah_lokus(genotipe)
+    opsi_per_lokus = [[l[0], l[1]] for l in lokus]
+    return ["".join(g) for g in product(*opsi_per_lokus)]
+
+
+def _gabung_gamet(g1: str, g2: str) -> str:
+    """Gabungkan dua gamet menjadi genotipe anak yang ternormalisasi."""
+    if len(g1) != len(g2):
+        raise ValueError("Kedua gamet harus memiliki jumlah lokus yang sama.")
+
+    pasangan = []
+    for a1, a2 in zip(g1, g2):
+        pasangan.append(_normalisasi_lokus(a1 + a2))
+    return "".join(pasangan)
+
+
+def _fenotipe_dari_genotipe(genotipe: str) -> str:
+    """Sederhanakan fenotipe berdasar dominansi lengkap.
+
+    Setiap lokus:
+    - Jika ada alel dominan (huruf besar), fenotipe lokus = Dominan(X)
+    - Jika tidak ada, fenotipe lokus = Resesif(x)
+    """
+    lokus = _pisah_lokus(genotipe)
+    hasil = []
+    for l in lokus:
+        if any(ch.isupper() for ch in l):
+            simbol = next(ch for ch in l if ch.isupper())
+            hasil.append(f"Dominan({simbol})")
+        else:
+            hasil.append(f"Resesif({l[0]})")
+    return " | ".join(hasil)
+
+
+def simulasi_persilangan(induk1: str, induk2: str) -> HasilPersilangan:
+    """Hitung distribusi genotipe dan fenotipe keturunan.
+
+    Mengikuti prinsip Mendel:
+    - Hukum segregasi: alel berpisah saat pembentukan gamet
+    - Hukum asortasi bebas: lokus berbeda berasortasi independen
+    """
+    g1 = _gamet_dari_genotipe(induk1)
+    g2 = _gamet_dari_genotipe(induk2)
+
+    total = len(g1) * len(g2)
+    hitung_genotipe = Counter()
+
+    for gamet1 in g1:
+        for gamet2 in g2:
+            anak = _gabung_gamet(gamet1, gamet2)
+            hitung_genotipe[anak] += 1
+
+    hitung_fenotipe = Counter()
+    for geno, n in hitung_genotipe.items():
+        hitung_fenotipe[_fenotipe_dari_genotipe(geno)] += n
+
+    genotipe_persen = {
+        k: (v / total) * 100 for k, v in sorted(hitung_genotipe.items(), key=lambda x: (-x[1], x[0]))
+    }
+    fenotipe_persen = {
+        k: (v / total) * 100 for k, v in sorted(hitung_fenotipe.items(), key=lambda x: (-x[1], x[0]))
+    }
+
+    return HasilPersilangan(genotipe=genotipe_persen, fenotipe=fenotipe_persen)
+
+
+def cetak_hasil(induk1: str, induk2: str) -> None:
+    hasil = simulasi_persilangan(induk1, induk2)
+
+    print(f"Persilangan: {induk1} x {induk2}\n")
+    print("Distribusi Genotipe:")
+    for g, p in hasil.genotipe.items():
+        print(f"- {g}: {p:.2f}%")
+
+    print("\nDistribusi Fenotipe:")
+    for f, p in hasil.fenotipe.items():
+        print(f"- {f}: {p:.2f}%")
+
+
+if __name__ == "__main__":
+    # Contoh klasik Mendel:
+    # 1) Monohibrid: Aa x Aa -> rasio fenotipe ~3:1
+    # 2) Dihibrid: AaBb x AaBb -> rasio fenotipe ~9:3:3:1
+    print("=== Simulasi Monohibrid (Aa x Aa) ===")
+    cetak_hasil("Aa", "Aa")
+
+    print("\n=== Simulasi Dihibrid (AaBb x AaBb) ===")
+    cetak_hasil("AaBb", "AaBb")
